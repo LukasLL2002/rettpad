@@ -2139,7 +2139,12 @@ function showSetPassword(ctx) {
     busy = true;
     try {
       await fnCall("account", { action: "change_password", current_password: viaLink ? undefined : ctx.pw || (cur && cur.value), new_password: p1.value });
+      /* Der Anmeldeserver beendet beim Passwortwechsel alle Sitzungen → direkt mit dem neuen Passwort neu anmelden */
+      const em = (ME && ME.email) || ((await sb.auth.getSession()).data.session || { user: {} }).user.email;
+      await sb.auth.signOut({ scope: "local" }).catch(() => {});
+      const re = await sb.auth.signInWithPassword({ email: em, password: p1.value });
       p1.value = p2.value = ""; ctx.pw = null; ctx.link = null; toast("Passwort gespeichert");
+      if (re.error) return showLogin("", null, "Passwort gespeichert – bitte mit dem neuen Passwort anmelden.");
       afterAuth(ctx);
     } catch (e) { busy = false; showErr(err, "Passwort nicht geändert: " + e.message + (viaLink && /Aktuelles Passwort/i.test(e.message) ? " – der Link ist älter als 1 Stunde. Bitte abmelden, E-Mail-Adresse eingeben und „Passwort vergessen?“ nutzen." : "")); }
   };

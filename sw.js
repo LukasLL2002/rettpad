@@ -1,6 +1,6 @@
 /* RettPad – Service Worker: alle Dateien beim Installieren cachen (offline-fähig).
    Strategie: Navigation & App-Dateien network-first mit Cache-Fallback (Updates kommen sofort an, offline läuft alles aus dem Cache). */
-const C = "rettpad-trainer-v13";
+const C = "rettpad-trainer-v14";
 const FILES = ["./", "index.html", "app.css", "data.js", "app.js", "vendor/supabase.js", "manifest.webmanifest", "favicon.ico",
   "icons/icon.svg", "icons/icon-maskable.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-192.png", "icons/icon-maskable-512.png",
   "icons/apple-touch-icon.png", "icons/screenshot-wide.png", "icons/screenshot-narrow.png",
