@@ -443,7 +443,7 @@ function childrenOf(v) {
   return list.filter((n) => !(n.itwOnly && ty !== "ITW"));
 }
 function valueText(p, n) {
-  if (n.kind === "single") return p.sel[n.id] || "";
+  if (n.kind === "single") return selText(p, n);
   if (n.kind === "multi") return (p.sel[n.id] || []).join(", ");
   if (n.kind === "form") { const v = p.forms[n.form] || {}; return D.FORMS[n.form].fields.map((f) => v[f.k]).filter(Boolean).slice(0, 3).join(", "); }
   if (n.kind === "entry") { const c = p.entries.filter((e) => e.node === n.id).length; return c ? c + "× dokumentiert" : ""; }
@@ -458,6 +458,12 @@ function valueText(p, n) {
   }
   if (n.kind === "menu") { let c = 0; (function w(x) { (x.children || []).forEach((y) => { if (valueText(p, y)) c++; w(y); }); })(n); return c ? c + " Angaben" : ""; }
   return "";
+}
+/* Anzeigetext einer Auswahl inkl. Zusatz (z. B. Schmerz + Tolerabilität) */
+function selText(p, n) {
+  const v = p.sel[n.id]; const s = Array.isArray(v) ? v.join(", ") : v || "";
+  const tol = n.tol && s && p.sel[n.id + "_tol"];
+  return s && tol ? s + ", " + tol : s;
 }
 function viewNode(v) {
   const p = P();
@@ -499,7 +505,15 @@ function viewOpts(v) {
     const on = n.kind === "single" ? cur === o : n.kind === "multi" ? (cur || []).includes(o) : false;
     return h("button", { class: "tile" + (on ? " sel" : "") + (n.info && n.info[o] ? " info" : ""), "data-opt": o, onclick: () => pickOpt(n, o) }, o);
   });
-  const hint = n.kind === "entry" ? "Jede Auswahl erzeugt einen Verlaufseintrag mit Zeitstempel." : n.kind === "multi" ? "Mehrfachauswahl – mit OK übernehmen." : "Einfachauswahl – Antippen übernimmt den Wert (erneut antippen = löschen).";
+  const hint = n.kind === "entry" ? "Jede Auswahl erzeugt einen Verlaufseintrag mit Zeitstempel." : n.kind === "multi" ? "Mehrfachauswahl – mit OK übernehmen." + (n.excl ? " „" + n.excl.join("“ / „") + "“ schließen andere Befunde aus." : "") : n.tol ? "Wert wählen, Tolerabilität angeben und mit OK übernehmen (erneut antippen = löschen)." : "Einfachauswahl – Antippen übernimmt den Wert (erneut antippen = löschen).";
+  if (n.tol) {
+    const tk = n.id + "_tol", nb = !cur || cur === "nicht beurteilbar";
+    return h("div", null, h("p", { class: "small", style: "color:#e6e8ee;margin:0 0 8px" }, hint), h("div", { class: "tiles" }, tiles),
+      h("div", { class: "card", style: "margin-top:10px" }, h("h2", null, "Schmerz für den Patienten"), h("div", { class: "cb" },
+        h("div", { class: "seg", "data-a": "tol" }, n.tol.map((o) => h("button", { type: "button", class: p.sel[tk] === o ? "on" : "", "data-tol": o, disabled: nb, onclick: () => { if (!canEdit()) return; p.sel[tk] = p.sel[tk] === o ? "" : o; setStatic(n.id, selText(p, n)); render(); } }, o))),
+        nb ? h("p", { class: "small" }, cur === "nicht beurteilbar" ? "Schmerz nicht beurteilbar – keine Tolerabilität." : "Zuerst einen NRS-Wert wählen.") : null)),
+      h("div", { class: "formbar" }, h("button", { class: "tbtn", onclick: () => { if (!canEdit()) return; p.sel[n.id] = ""; p.sel[tk] = ""; setStatic(n.id, ""); render(); } }, "Auswahl löschen"), h("button", { class: "tbtn ok", "data-a": "ok", onclick: () => { back(); toast(n.label.replace(/-/g, "") + ": " + (selText(p, n) || "gelöscht")); } }, "OK")));
+  }
   return h("div", null, h("p", { class: "small", style: "color:#e6e8ee;margin:0 0 8px" }, hint), h("div", { class: "tiles" }, tiles),
     n.kind === "multi" ? h("div", { class: "formbar" }, h("button", { class: "tbtn", onclick: () => { if (!canEdit()) return; p.sel[n.id] = []; setStatic(n.id, ""); render(); } }, "Auswahl löschen"), h("button", { class: "tbtn ok", "data-a": "ok", onclick: back }, "OK")) : null);
 }
@@ -507,6 +521,11 @@ function pickOpt(n, o) {
   if (!canEdit()) return;
   const p = P();
   if (n.kind === "entry") { addEntry(n.id, fullLabel(n, o)); return; }
+  if (n.kind === "single" && n.tol) {
+    p.sel[n.id] = p.sel[n.id] === o ? "" : o;
+    if (!p.sel[n.id] || o === "nicht beurteilbar") p.sel[n.id + "_tol"] = "";
+    setStatic(n.id, selText(p, n)); render(); return;
+  }
   if (n.kind === "single") {
     p.sel[n.id] = p.sel[n.id] === o ? "" : o; setStatic(n.id, p.sel[n.id]);
     if (n.id === "s_einsatzart") p.type = patType(p);
@@ -516,7 +535,9 @@ function pickOpt(n, o) {
   }
   const arr = p.sel[n.id] || (p.sel[n.id] = []);
   const i = arr.indexOf(o);
-  if (i >= 0) arr.splice(i, 1); else { arr.push(o); if (n.info && n.info[o]) modal("Hinweis (i)", h("p", { style: "font-size:1.1em" }, "ℹ️ " + n.info[o]), [{ t: "OK", cls: "primary" }]); }
+  if (i >= 0) arr.splice(i, 1); else {
+    if (n.excl) { if (n.excl.includes(o)) arr.length = 0; else for (const x of n.excl) { const j = arr.indexOf(x); if (j >= 0) arr.splice(j, 1); } }
+    arr.push(o); if (n.info && n.info[o]) modal("Hinweis (i)", h("p", { style: "font-size:1.1em" }, "ℹ️ " + n.info[o]), [{ t: "OK", cls: "primary" }]); }
   setStatic(n.id, arr); render();
 }
 
@@ -539,15 +560,45 @@ function fieldEl(f, val, onchg) {
   wrap.append(h("label", null, f.label + (f.req ? " *" : "")), inp);
   return wrap;
 }
+/* SINNHAFT-Vorbefüllung aus den Einsatzdaten */
+function sinnhaftPrefill(p) {
+  const fo = (n) => p.forms[n] || {}, pa = fo("patient"), tr = fo("transport"), ue = fo("uebergabe"), me = fo("medikation");
+  const sl = (id) => { const n = INDEX[id]; return n ? selText(p, n) : ""; };
+  const ka = "k. A.";
+  const vs = p.vitals.slice().sort((a, b) => a.t - b.t);
+  const lastOf = (k) => { for (let i = vs.length - 1; i >= 0; i--) if (vs[i][k] != null && vs[i][k] !== "") return vs[i]; return null; };
+  const vv = (k, l, u) => { const r = lastOf(k); return r ? l + " " + (k === "sys" ? r.sys + "/" + (r.dia || "–") : r[k]) + (u ? " " + u : "") : ""; };
+  const j = (...a) => a.filter(Boolean).join(", ");
+  const dx = Object.keys(p.sel).filter((k) => k.startsWith("m_dx_")).flatMap((k) => p.sel[k] || []);
+  const a = age(pa.geb);
+  const s = "„Start“ – Übergabe" + (sl("s_uebergabe_an") ? " an " + sl("s_uebergabe_an") : "") + (ue.an ? " (" + ue.an + ")" : "") + (ue.klinik ? ", " + ue.klinik : "") + ". Alle bereit? Ruhe, keine Tätigkeit am Patienten.";
+  const i = j(pa.geschlecht || "Geschlecht " + ka, pa.name ? (pa.name + (pa.vorname ? ", " + pa.vorname : "")) : "Name " + ka, a !== "" ? a + " Jahre" : "Alter " + ka, pa.gewicht && (a === "" || a < 18) ? pa.gewicht + " kg" : "");
+  const n1 = ["Was: " + (j(dx.join(", "), fo("dxtext").text, sl("m_symptome")) || ka), "Wie: " + (fo("notfallgeschehen").text || tr.stichwort || ka), "Wann: " + (sl("s_ereignisbeginn") || (tr.t_alarm ? "Alarm " + tr.t_alarm : ka)), "Wo/woher: " + (j(sl("s_auffinde"), tr.einsatzort) || ka)].join("\n");
+  const atm = sl("m_atmung"), airway = /Stridor|Apnoe|Schnappatmung/.test(atm) || dx.some((x) => /Atemwegsverlegung|Aspiration/.test(x));
+  const gcs = p.scores.gcs ? "GCS " + p.scores.gcs.total : "";
+  const n2 = [
+    "A: " + (airway ? "Problem – " + atm : (atm ? "frei" : ka)),
+    "B: " + (j(atm, vv("spo2", "SpO2", "%"), vv("af", "AF", "/min"), vv("co2", "etCO2", "mmHg")) || ka),
+    "C: " + (j(sl("s_ekg"), vv("hf", "HF", "/min"), vv("sys", "RR", "mmHg"), sl("m_haut")) || ka),
+    "D: " + (j(sl("s_bewusstsein"), gcs, sl("s_pupli") ? "Pupille li " + sl("s_pupli") : "", sl("s_pupre") ? "re " + sl("s_pupre") : "", sl("m_extrem"), p.scores.befast ? "BE-FAST " + (p.scores.befast.pos ? "positiv" : "negativ") : "", p.scores.iss4 ? "4ISS " + p.scores.iss4.total : "", vv("bz", "BZ", "mg/dl"), sl("m_psyche") ? "Psyche: " + sl("m_psyche") : "") || ka),
+    "E: " + (j(sl("m_verletz") ? "Verletzungen: " + sl("m_verletz") : "", vv("temp", "Temp", "°C"), sl("s_schmerz") ? "Schmerz NRS " + sl("s_schmerz") : "") || ka)].join("\n");
+  const acts = p.entries.filter((e) => e.cat === "Maßnahmen").sort((x, y) => x.t - y.t).map((e) => fmtHM(e.t) + " " + e.text);
+  const meds = p.meds.slice().sort((x, y) => x.t - y.t).map((x) => fmtHM(x.t) + " " + x.drug + " " + (x.dose || "") + " " + (x.unit || "") + " " + (x.route || ""));
+  const h_ = acts.concat(meds).join("\n") + (p.entries.some((e) => e.node === "e_zustand") ? "\nWirkung/Verlauf: " + p.entries.filter((e) => e.node === "e_zustand").slice(-1)[0].text : "");
+  const an = ["Allergien: " + (me.allergie || ka), "Vorerkrankungen: " + (sl("m_vorerkr") || ka), "Medikation: " + (me.med || ka), "Cave/Besonderheiten: " + (sl("m_cave") || ka)].join("\n");
+  return { s, i, n1, n2, h: h_.replace(/ +/g, " ").trim() || "keine Maßnahmen dokumentiert", a: an };
+}
 function viewForm(v) {
   const f = D.FORMS[v.form], p = P();
-  const draft = clone(p.forms[v.form] || {});
+  const draft = v.draft || (v.draft = clone(p.forms[v.form] || {}));
   const ro = p.closed && !S.admin;
+  if (f.prefill && !ro && !v.prefilled) { v.prefilled = true; const pre = sinnhaftPrefill(p); for (const k in pre) if (!String(draft[k] || "").trim() && pre[k]) draft[k] = pre[k]; }
   const form = h("div", { class: "form" }, f.fields.map((fd) => fieldEl(fd, () => draft[fd.k], (x) => (draft[fd.k] = x))));
   if (ro) form.querySelectorAll("input,select,textarea,button").forEach((x) => (x.disabled = true));
   const extra = [];
   if (f.kvk) extra.push(h("button", { class: "tbtn primary", "data-a": "kvk", onclick: () => readCard(() => { Object.assign(draft, P().forms.patient); render(); }) }, "💳 eGK/KVK einlesen (simuliert)"));
   if (v.form === "patient") { const a = age(draft.geb); if (a !== "") extra.push(h("span", { class: "chip" }, "Alter: " + a + " J.")); }
+  if (f.prefill) extra.push(h("button", { class: "tbtn primary", "data-a": "sinn-prefill", disabled: ro, onclick: () => { const pre = sinnhaftPrefill(P()); for (const k in pre) if (pre[k]) draft[k] = pre[k]; render(); toast("SINNHAFT aus den Einsatzdaten neu befüllt"); } }, "↻ Aus Einsatzdaten befüllen"), h("span", { class: "small", style: "color:#cfd6e4" }, "Vorbefüllt aus Einsatzdaten – bitte prüfen. Max. ca. 120 s; fehlende Angaben ausdrücklich nennen."));
   const saveF = () => {
     if (!canEdit()) return;
     for (const fd of f.fields) {
@@ -593,7 +644,7 @@ function viewHome() {
   const miss = missing(p);
   return h("div", { class: "home" },
     h("div", null,
-      h("div", { class: "card" }, h("h2", null, h("span", { class: "sp" }, "Einsatz " + (m.nr || "(ohne Nummer)")), h("span", { class: "chip y" }, "FMS " + fms + " – " + fmsT)),
+      h("div", { class: "card" }, h("h2", null, h("span", { class: "sp" }, "Einsatz " + (m.nr || "(ohne Nummer)")), h("span", { class: "chip y" }, "FMS " + fms + " – " + fmsT), S.leit.sprech && !S.leit.sprech.ack ? h("span", { class: "chip " + (S.leit.sprech.s === 0 ? "r" : "y"), "data-a": "home-sprech" }, S.leit.sprech.s === 0 ? "🔴 Prio-Sprechwunsch" : "Sprechwunsch") : null),
         h("div", { class: "cb" }, kv([["Stichwort", tr.stichwort || (m.alarm && m.alarm.stichwort)], ["Einsatzort", tr.einsatzort], ["Transportziel", tr.ziel], ["Alarm", tr.t_alarm], ["Protokolltyp", patType(p)], ["Patienten im Einsatz", String(m.patients.length)]]),
           h("div", { class: "row", style: "margin-top:10px" },
             h("button", { class: "tbtn primary", "data-a": "demoalarm", onclick: simulateAlarm }, "📟 Alarm simulieren"),
@@ -766,7 +817,7 @@ TOOLS.scores = { title: "Scores", render(v) {
       h("button", { class: "tile" + (p.sel.s_naca ? " has" : ""), onclick: () => go({ t: "opts", nodeId: "s_naca", p: "p8", path: [] }) }, "NACA", h("span", { class: "val" }, p.sel.s_naca || "")),
       h("button", { class: "tile" + (p.scores.iss4 ? " has" : ""), onclick: () => go({ t: "tool", tool: "iss4" }) }, "4ISS", h("span", { class: "val" }, p.scores.iss4 ? String(p.scores.iss4.total) : "")),
       h("button", { class: "tile" + (p.scores.befast ? " has" : ""), onclick: () => go({ t: "tool", tool: "befast" }) }, "BE-FAST", h("span", { class: "val" }, p.scores.befast ? (p.scores.befast.pos ? "positiv" : "negativ") : "")),
-      h("button", { class: "tile" + (p.sel.s_schmerz ? " has" : ""), onclick: () => go({ t: "opts", nodeId: "s_schmerz", p: "p3", path: [] }) }, "NRS Schmerz", h("span", { class: "val" }, p.sel.s_schmerz || ""))),
+      h("button", { class: "tile" + (p.sel.s_schmerz ? " has" : ""), onclick: () => go({ t: "opts", nodeId: "s_schmerz", p: "p3", path: [] }) }, "NRS Schmerz", h("span", { class: "val" }, selText(p, node("s_schmerz"))))),
     card("qSOFA: " + q + (q >= 2 ? " – Sepsis-Verdacht" : ""), scoreTable([{ k: "af", l: "Atemfrequenz ≥ 22/min", o: [[0, "nein"], [1, "ja"]] }, { k: "rr", l: "RR sys ≤ 100 mmHg", o: [[0, "nein"], [1, "ja"]] }, { k: "bw", l: "Bewusstseinsveränderung", o: [[0, "nein"], [1, "ja"]] }], s.q, render),
       h("div", { class: "formbar" }, h("button", { class: "tbtn ok", "data-a": "qsofa", onclick: () => { if (!canEdit()) return; p.scores.qsofa = { total: q }; addEntry(null, "qSOFA " + q, "Scores"); } }, "qSOFA übernehmen"))),
     card("APGAR: " + ap, scoreTable([{ k: "a", l: "Atmung", o: [[0, "keine"], [1, "unregelmäßig"], [2, "regelmäßig"]] }, { k: "p", l: "Puls", o: [[0, "keiner"], [1, "< 100"], [2, "> 100"]] }, { k: "g", l: "Grundtonus", o: [[0, "schlaff"], [1, "träge Flexion"], [2, "aktiv"]] }, { k: "ac", l: "Aussehen", o: [[0, "blau/blass"], [1, "Stamm rosig"], [2, "rosig"]] }, { k: "r", l: "Reflexe", o: [[0, "keine"], [1, "Grimassieren"], [2, "Schreien"]] }], s.ap, render),
@@ -922,13 +973,32 @@ function acceptAlarm(target) {
 }
 function setFms(s) {
   const p = P(), tr = p.forms.transport || (p.forms.transport = {}), hm = fmtHM(Date.now());
-  S.settings.fms = s; M().fms.push({ s, t: Date.now() });
+  if (s === 0 || s === 5) return sprechwunsch(s);
+  S.settings.fms = s; S.leit.sprech = null; M().fms.push({ s, t: Date.now() });
   const map = { 3: "t_aus", 4: "t_ankunft", 7: "t_abfahrt", 8: "t_ziel", 1: "t_frei", 2: "t_frei" };
   if (map[s] && !tr[map[s]] && (s !== 1 && s !== 2 || tr.t_ankunft)) tr[map[s]] = hm;
   const txt = "Status " + s + " – " + D.FMS.find((x) => x.s === s).t;
   addEntry(null, txt, "Status", { t: Date.now(), silent: true });
   toast(txt + (S.leit.connected ? " (an Leitstelle gesendet – simuliert)" : " (offline – wird nachgesendet)"));
-  if (s === 5 && S.leit.connected) setTimeout(() => toast("Leitstelle (simuliert): „Sprechaufforderung – bitte kommen.“", 3500), 1800);
+}
+/* Sprechwunsch (Status 5) und priorisierter Sprechwunsch (Status 0, dringend): ändern den Fahrzeugstatus nicht,
+   sondern werden bis zur Sprechaufforderung der Leitstelle angezeigt – wie am FMS-Bedienteil. */
+function sprechwunsch(s) {
+  const prio = s === 0, now = Date.now(), m = M();
+  m.fms.push({ s, t: now });
+  S.leit.sprech = { s, t: now, ack: null };
+  const txt = "Status " + s + " – " + (prio ? "Priorisierter Sprechwunsch (dringend)" : "Sprechwunsch");
+  addEntry(null, txt, "Status", { t: now, silent: true });
+  if (prio) beep([[1320, 0.15], [0, 0.05], [1320, 0.15], [0, 0.05], [1320, 0.3]]); else beep([[880, 0.15]]);
+  toast((prio ? "🔴 " : "") + txt + (S.leit.connected ? " (an Leitstelle gesendet – simuliert)" : " (offline – wird nachgesendet)"), prio ? 4000 : undefined);
+  if (!S.leit.connected) return;
+  setTimeout(() => {
+    const cur = S.leit.sprech; if (!cur || cur.t !== now) return;
+    cur.ack = Date.now();
+    const a = prio ? "Leitstelle (simuliert): „Priorisierter Sprechwunsch erkannt – " + ((S.crew && S.crew.fahrzeug) || "Fahrzeug") + ", sofort kommen!“" : "Leitstelle (simuliert): „Sprechaufforderung – bitte kommen.“";
+    addEntry(null, (prio ? "Sprechaufforderung (priorisiert) " : "Sprechaufforderung ") + "der Leitstelle erhalten", "Status", { t: cur.ack, silent: true, bg: true });
+    toast(a, 3500);
+  }, prio ? 900 : 1800);
 }
 TOOLS.leitstelle = { title: "Leitstelle – Alarmierung", render() {
   const a = S.leit.pending || M().alarm;
@@ -947,8 +1017,10 @@ TOOLS.leitstelle = { title: "Leitstelle – Alarmierung", render() {
           S.leit.pending ? h("button", { class: "tbtn", "data-a": "accept-cur", onclick: () => acceptAlarm("cur") }, "in aktuellen Einsatz") : null,
           S.leit.pending ? h("button", { class: "tbtn ok", "data-a": "accept", onclick: () => acceptAlarm("auto") }, "übernehmen") : null,
           a ? h("button", { class: "tbtn", "data-a": "nav", onclick: () => go({ t: "tool", tool: "nav" }) }, "🧭 Navigation") : null))),
-    card("Status (FMS) senden", h("div", { class: "tiles" }, D.FMS.map((x) => h("button", { class: "tile" + (S.settings.fms === x.s ? " sel" : ""), "data-fms": x.s, onclick: () => { setFms(x.s); } }, h("span", { style: "font-size:1.6em" }, String(x.s)), h("span", { class: "val" }, x.t))))),
-    M().fms.length ? card("Statusverlauf", h("table", { class: "list" }, h("tbody", null, M().fms.slice().reverse().map((x) => h("tr", null, h("td", null, fmtT(x.t)), h("td", null, "Status " + x.s), h("td", null, D.FMS.find((y) => y.s === x.s).t)))))) : null);
+    card("Status (FMS) senden", h("div", { class: "tiles" }, D.FMS.map((x) => h("button", { class: "tile" + (S.settings.fms === x.s ? " sel" : "") + (x.s === 5 ? " fms-sw" : "") + (x.prio ? " fms-prio" : "") + (S.leit.sprech && S.leit.sprech.s === x.s && !S.leit.sprech.ack ? " fms-wait" : ""), "data-fms": x.s, onclick: () => { setFms(x.s); } }, h("span", { style: "font-size:1.6em" }, String(x.s)), h("span", { class: "val" }, x.t)))),
+      S.leit.sprech ? h("p", { class: "fms-info" + (S.leit.sprech.s === 0 ? " prio" : ""), "data-a": "sprech-info" }, (S.leit.sprech.s === 0 ? "🔴 Priorisierter Sprechwunsch" : "Sprechwunsch") + " gesendet " + fmtT(S.leit.sprech.t) + (S.leit.sprech.ack ? " – Sprechaufforderung " + fmtT(S.leit.sprech.ack) : " – wartet auf Sprechaufforderung") + " · Fahrzeugstatus bleibt " + S.settings.fms) : null,
+      h("p", { class: "small" }, "Status 5 = Sprechwunsch, Status 0 = priorisierter (dringender) Sprechwunsch – nur bei Gefahr/Dringlichkeit. Beide ändern den Fahrzeugstatus nicht.")),
+    M().fms.length ? card("Statusverlauf", h("table", { class: "list" }, h("tbody", null, M().fms.slice().reverse().map((x) => h("tr", { class: x.s === 0 ? "fms-prio-row" : "" }, h("td", null, fmtT(x.t)), h("td", null, "Status " + x.s), h("td", null, D.FMS.find((y) => y.s === x.s).t)))))) : null);
 }};
 TOOLS.nav = { title: "Navigation", render() {
   const p = P(), tr = p.forms.transport || {};
@@ -1015,6 +1087,7 @@ TOOLS.prenotice = { title: "Klinikvoranmeldung", render(v) {
 
 /* ---------- Medizintechnik (Simulation) ---------- */
 let mtTimer = 0;
+const VITAL_LOG_MS = 90000; /* Vitalwerte-Log des Monitors: alle 1,5 Minuten */
 function mtStart() {
   if (!canEdit()) return;
   S.settings.medtech = true; clearInterval(mtTimer);
@@ -1024,15 +1097,14 @@ function mtStart() {
     if (!S.settings.medtech) return clearInterval(mtTimer);
     const j = (x, d, lo, hi) => Math.max(lo, Math.min(hi, Math.round(x + (Math.random() - 0.5) * d)));
     st = { hf: j(st.hf, 6, 40, 180), spo2: j(st.spo2, 2, 82, 100), af: j(st.af, 2, 8, 35), co2: j(st.co2, 3, 20, 55), sys: st.sys, dia: st.dia };
-    if (n % 3 === 0) { st.sys = j(st.sys, 10, 80, 220); st.dia = j(st.dia, 6, 40, 120); }
+    if (n) { st.sys = j(st.sys, 10, 80, 220); st.dia = j(st.dia, 6, 40, 120); }
     const rec = Object.assign({ id: uid(), t: Date.now(), src: S.settings.device.replace(" (Simulation)", "") }, st);
-    if (n % 3 !== 0) { delete rec.sys; delete rec.dia; }
     S.lastImport = rec; P().vitals.push(rec); n++;
-    softRefresh();
+    if (canEdit(true)) addEntry(null, "Monitor-Log: RR " + rec.sys + "/" + rec.dia + ", HF " + rec.hf + ", SpO2 " + rec.spo2 + ", AF " + rec.af + ", etCO2 " + rec.co2, "Messwerte", { t: rec.t, silent: true, bg: true }); else softRefresh();
   };
-  tick(); mtTimer = setInterval(tick, 5000);
+  tick(); mtTimer = setInterval(tick, VITAL_LOG_MS);
   addEntry(null, "Medizintechnik-Übertragung gestartet: " + S.settings.device, "Medizintechnik", { t: Date.now(), silent: true });
-  toast("Datenübernahme vom Medizingerät läuft (simuliert, alle 5 s)");
+  toast("Datenübernahme vom Medizingerät läuft (simuliert) – Vitalwerte-Log alle 1,5 min");
 }
 function mtStop() { S.settings.medtech = false; clearInterval(mtTimer); addEntry(null, "Medizintechnik-Übertragung gestoppt", "Medizintechnik", { t: Date.now(), silent: true }); }
 function parseDeviceFile(txt, name) {
@@ -1071,7 +1143,7 @@ function importDevice(txt, name) {
 }
 function demoFile(kind) {
   const now = Date.now(); const rows = [];
-  for (let i = 12; i >= 0; i--) { const t = new Date(now - i * 60000); rows.push({ t, hr: 96 - i + Math.round(Math.random() * 6), sys: 150 - i * 2, dia: 90 - i, spo2: 91 + Math.min(8, 12 - i), rr: 22 - Math.floor(i / 3), etco2: 34 + (i % 4) }); }
+  for (let i = 12; i >= 0; i--) { const t = new Date(now - i * VITAL_LOG_MS); rows.push({ t, hr: 96 - i + Math.round(Math.random() * 6), sys: 150 - i * 2, dia: 90 - i, spo2: 91 + Math.min(8, 12 - i), rr: 22 - Math.floor(i / 3), etco2: 34 + (i % 4) }); }
   if (kind === "json") return JSON.stringify({ device: "Defi/Monitor B (Simulation)", patient: "fiktiv", vitals: rows.map((r) => ({ time: r.t.toISOString(), hr: r.hr, nibp_sys: r.sys, nibp_dia: r.dia, spo2: r.spo2, rr: r.rr, etco2: r.etco2 })) }, null, 1);
   return "# Defi/Monitor A – Trenddaten (Simulation, fiktiv)\nZeit;HF;SYS;DIA;SpO2;AF;etCO2\n" + rows.map((r) => [fmtT(r.t.getTime()), r.hr, r.sys, r.dia, r.spo2, r.rr, r.etco2].join(";")).join("\n");
 }
@@ -1103,14 +1175,14 @@ async function protocolHTML(p, m, opts) {
   const f = (n) => p.forms[n] || {};
   const pa = f("patient"), tr = f("transport"), cr = p.forms.crew || S.crew, ko = f("kosten");
   const row = (pairs) => "<tr>" + pairs.map(([k, v]) => "<th>" + esc(k) + "</th><td>" + esc(v || "") + "</td>").join("") + "</tr>";
-  const selList = (pk) => Object.keys(INDEX).filter((id) => INDEX[id].p === pk && (INDEX[id].kind === "single" || INDEX[id].kind === "multi")).map((id) => { const v = p.sel[id]; const s = Array.isArray(v) ? v.join(", ") : v; return s ? [INDEX[id].label.replace(/-/g, ""), s] : null; }).filter(Boolean);
+  const selList = (pk) => Object.keys(INDEX).filter((id) => INDEX[id].p === pk && (INDEX[id].kind === "single" || INDEX[id].kind === "multi")).map((id) => { const s = selText(p, INDEX[id]); return s ? [INDEX[id].label.replace(/-/g, ""), s] : null; }).filter(Boolean);
   const kvRows = (arr) => { let o = ""; for (let i = 0; i < arr.length; i += 2) o += row([arr[i], arr[i + 1] || ["", ""]]); return o; };
   const photos = [];
   for (const ph of p.photos) { const d = await getBlob(ph.id); if (d) photos.push('<figure style="display:inline-block;margin:2px"><img src="' + d + '"><figcaption>' + esc(fmtT(ph.t) + " " + ph.label) + "</figcaption></figure>"); }
   const vit = p.vitals.slice().sort((a, b) => a.t - b.t);
   const ents = p.entries.slice().sort((a, b) => a.t - b.t);
   const dx = Object.keys(p.sel).filter((k) => k.startsWith("m_dx_")).flatMap((k) => p.sel[k]);
-  const fms = (m.fms || []).map((x) => fmtHM(x.t) + " S" + x.s).join(" · ");
+  const fms = (m.fms || []).map((x) => fmtHM(x.t) + " S" + x.s + (x.s === 0 ? " (Prio-Sprechwunsch)" : x.s === 5 ? " (Sprechwunsch)" : "")).join(" · ");
   let html = '<div class="print">' +
     '<div class="wm">RETTPAD – SCHULUNGS-SIMULATION – FIKTIVE DATEN – KEIN GÜLTIGES EINSATZPROTOKOLL</div>' +
     '<table style="border:0"><tr><td style="border:0"><h1>Einsatzprotokoll ' + esc(patType(p)) + " – Patient " + esc(p.letter) + '</h1>Einsatz-Nr. ' + esc(m.nr || tr.einsatznr || "–") + " · erstellt " + fmtD(p.created) + " " + fmtHM(p.created) + (p.closed ? " · abgeschlossen " + fmtD(p.closedAt) + " " + fmtHM(p.closedAt) : " · NICHT abgeschlossen") + '</td><td style="border:0;text-align:right;white-space:pre-line;font-size:11px">' + esc(S.settings.stamp) + "</td></tr></table>" +
@@ -1126,7 +1198,7 @@ async function protocolHTML(p, m, opts) {
     "<h2>5./6. Verlauf und Maßnahmen (Verlaufsliste)</h2><table><tr><th>Zeit</th><th>Bereich</th><th>Eintrag</th></tr>" + ents.map((e) => "<tr><td>" + fmtT(e.t) + (e.edited ? "*" : "") + "</td><td>" + esc(e.cat) + "</td><td>" + esc(e.text) + "</td></tr>").join("") + "</table>" +
     (p.meds.length ? "<h2>Medikamente</h2><table>" + p.meds.map((x) => "<tr><td>" + fmtT(x.t) + "</td><td>" + esc(x.drug) + "</td><td>" + esc(x.dose + " " + x.unit) + "</td><td>" + esc(x.route) + "</td></tr>").join("") + "</table>" : "") +
     "<h2>7. Übergabe</h2><table>" + kvRows(selList("p7").concat([["Übergabezeit", f("uebergabe").zeit], ["Übernehmende Person", f("uebergabe").an]])) + "</table>" +
-    (Object.values(f("isobar")).some(Boolean) ? "<table>" + ["i", "s", "o", "b", "a", "r"].map((k) => row([[k.toUpperCase(), f("isobar")[k]]])).join("") + "</table>" : "") +
+    (Object.values(f("sinnhaft")).some(Boolean) ? "<h3>Übergabe nach SINNHAFT</h3><table class='sinnhaft'>" + D.FORMS.sinnhaft.fields.map((fd) => "<tr><th>" + esc(fd.label.split(" (")[0]) + "</th><td style='white-space:pre-line'>" + esc(f("sinnhaft")[fd.k] || "–") + "</td></tr>").join("") + "</table>" : "") +
     "<h2>8. Ergebnis</h2><table>" + kvRows(selList("p8")) + "</table>" +
     (p.prenotice ? "<h2>Klinikvoranmeldung</h2><p>" + esc(p.prenotice.cat + " / " + p.prenotice.sym + " → " + p.prenotice.klinik + ", ETA " + (p.prenotice.eta || "–") + ", Status: " + p.prenotice.status + (p.prenotice.text ? ", „" + p.prenotice.text + "“" : "")) + "</p>" : "") +
     (Object.keys(p.mat).length ? "<h2>Materialverbrauch</h2><p>" + Object.entries(p.mat).map(([k, v]) => esc(v + "× " + k)).join(", ") + "</p>" : "") +

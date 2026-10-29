@@ -39,8 +39,8 @@ window.RPT_DATA = (function () {
       ]},
       { id: "s_ekg", label: "EKG", kind: "single", options: ["Sinusrhythmus","Sinustachykardie","Sinusbradykardie","Absolute Arrhythmie","SVT","Kammertachykardie","Kammerflimmern","Asystolie","PEA","AV-Block II°","AV-Block III°","ST-Hebung","Schrittmacher-rhythmus"] },
       { id: "m_atmung", label: "Atmung", kind: "multi", options: ["unauffällig","Dyspnoe","Tachypnoe","Bradypnoe","Zyanose","Stridor","Spastik","Rasselgeräusche","Schnappatmung","Apnoe"] },
-      { id: "m_psyche", label: "Psyche", kind: "multi", options: ["unauffällig","ängstlich","erregt","aggressiv","verwirrt","depressiv","suizidal","verlangsamt"] },
-      { id: "s_schmerz", label: "Schmerz (NRS)", kind: "single", options: ["0","1","2","3","4","5","6","7","8","9","10"] },
+      { id: "m_psyche", label: "Psyche", kind: "multi", options: ["unauffällig","ängstlich","erregt","aggressiv","verwirrt","depressiv","suizidal","verlangsamt","nicht beurteilbar"], excl: ["unauffällig","nicht beurteilbar"] },
+      { id: "s_schmerz", label: "Schmerz (NRS)", kind: "single", options: ["0","1","2","3","4","5","6","7","8","9","10","nicht beurteilbar"], tol: ["tolerabel","nicht tolerabel"] },
       { id: "m_haut", label: "Haut", kind: "multi", options: ["unauffällig","blass","kaltschweißig","zyanotisch","gerötet","Ödeme","Exsikkose","Exanthem"] },
       { id: "t_messwerte", label: "Messwerte", kind: "tool", tool: "vitals" },
       { id: "m_verletz", label: "Verletzungen", kind: "multi", options: ["keine","Kopf","HWS","Thorax","Abdomen","Becken","Wirbelsäule","Arm li","Arm re","Bein li","Bein re","Verbrennung"] },
@@ -124,7 +124,7 @@ window.RPT_DATA = (function () {
       { id: "s_uebergabe_an", label: "Übergabe an", kind: "single", options: ["Notaufnahme","Schockraum","Stroke Unit","Herzkatheterlabor","Intensivstation","Station","Hausarzt","Notarzt/RTH","vor Ort belassen"] },
       { id: "s_zustand_ueb", label: "Zustand bei Übergabe", kind: "single", options: ["gebessert","unverändert","verschlechtert","verstorben"] },
       { id: "f_uebergabe", label: "Übergabe-daten", kind: "form", form: "uebergabe" },
-      { id: "f_isobar", label: "ISOBAR", kind: "form", form: "isobar" },
+      { id: "f_sinnhaft", label: "SINNHAFT", kind: "form", form: "sinnhaft" },
       { id: "t_sign", label: "Unter-schriften", kind: "tool", tool: "signature" },
       { id: "t_vitals7", label: "Messwerte Übergabe", kind: "tool", tool: "vitals" },
     ]},
@@ -182,7 +182,17 @@ window.RPT_DATA = (function () {
     beatmung: { title: "Beatmungsparameter", fields: [ { k: "modus", label: "Modus", type: "select", options: ["","IPPV","SIMV","CPAP","BiPAP","PCV"] }, { k: "fio2", label: "FiO2 (%)", type: "number" }, { k: "vt", label: "AZV (ml)", type: "number" }, { k: "af", label: "Frequenz (/min)", type: "number" }, { k: "peep", label: "PEEP (mbar)", type: "number" }, { k: "pmax", label: "Pmax (mbar)", type: "number" } ] },
     perfusor: { title: "Perfusorliste (ITW)", fields: [ { k: "p1", label: "Perfusor 1 (Wirkstoff, Konz., ml/h)" }, { k: "p2", label: "Perfusor 2" }, { k: "p3", label: "Perfusor 3" }, { k: "p4", label: "Perfusor 4" } ] },
     uebergabe: { title: "Übergabedaten", fields: [ { k: "zeit", label: "Übergabezeit (HHMM)", type: "time", req: true }, { k: "an", label: "Übernehmende Person", req: true }, { k: "klinik", label: "Klinik/Abteilung" }, { k: "wertsachen", label: "Wertsachen/Eigentum übergeben" } ] },
-    isobar: { title: "ISOBAR-Übergabe", fields: [ { k: "i", label: "I – Identifikation", type: "textarea" }, { k: "s", label: "S – Situation", type: "textarea" }, { k: "o", label: "O – Observation (Befunde)", type: "textarea" }, { k: "b", label: "B – Background", type: "textarea" }, { k: "a", label: "A – Agreed Plan / Maßnahmen", type: "textarea" }, { k: "r", label: "R – Read back / Rückfragen", type: "textarea" } ] },
+    // SINNHAFT-Übergabeschema (Delphi-Konsens 2023, DGINA; von BAND e.V. 2024 für den Rettungsdienst empfohlen)
+    sinnhaft: { title: "SINNHAFT-Übergabe", prefill: true, fields: [
+      { k: "s", label: "S – Start (alle bereit? Ruhe, keine Tätigkeit am Patienten, Face-to-Face)", type: "textarea" },
+      { k: "i", label: "I – Identifikation (Geschlecht, Name, Alter – nicht Geburtsdatum; Kind: Gewicht)", type: "textarea" },
+      { k: "n1", label: "N – Notfallereignis (Was? Wie? Wann? Wo/woher?)", type: "textarea" },
+      { k: "n2", label: "N – Notfallpriorität (xABCDE-Probleme, pathologische Befunde und Vitalwerte)", type: "textarea" },
+      { k: "h", label: "H – Handlungen (Maßnahmen mit Dosis/Umfang/Zeitpunkt, Wirkung, bewusst unterlassen)", type: "textarea" },
+      { k: "a", label: "A – Anamnese (Allergien, Vorerkrankungen, Medikation, Infektionen, Soziales, Besonderheiten)", type: "textarea" },
+      { k: "f", label: "F – Fazit (Wiederholung durch das aufnehmende Team – Closed Loop)", type: "textarea" },
+      { k: "t", label: "T – Teamfragen (Rückfragen des aufnehmenden Teams)", type: "textarea" },
+    ] },
   };
 
   // Pflichtfelder je Protokolltyp; col = Spalte in der Vollständigkeitsprüfung
@@ -245,6 +255,7 @@ window.RPT_DATA = (function () {
     { s: 1, t: "Einsatzbereit über Funk" }, { s: 2, t: "Einsatzbereit auf Wache" }, { s: 3, t: "Einsatz übernommen" },
     { s: 4, t: "Am Einsatzort" }, { s: 5, t: "Sprechwunsch" }, { s: 6, t: "Nicht einsatzbereit" },
     { s: 7, t: "Patient aufgenommen" }, { s: 8, t: "Am Transportziel" },
+    { s: 0, t: "Priorisierter Sprechwunsch", prio: true },
   ];
 
   const VCHECK = {

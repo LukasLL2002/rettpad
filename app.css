@@ -519,3 +519,12 @@ html.lh #app.adm table.list .mini{padding:4px 7px;min-height:30px;font-size:.85e
 html.lh #app.adm table.list td,html.lh #app.adm table.list th{padding:4px 6px}
 html.lh #app.adm table.list td:last-child{white-space:nowrap!important}
 html.lh #app.adm table.list td:last-child .mini{display:inline-block;margin:1px 0;min-width:34px}
+/* FMS: Sprechwunsch (5) und priorisierter Sprechwunsch (0) */
+.tile.fms-sw{background:linear-gradient(#fff6cc,#f2cf4a);border-color:#8a6d00}
+.tile.fms-prio{background:linear-gradient(#ff8a80,#c62828);border-color:#7a0000;color:#fff;font-weight:700}
+.tile.fms-prio .val{color:#fff}
+.tile.fms-wait{animation:blink .8s step-end infinite;outline:3px solid #ffeb3b;outline-offset:-3px}
+.fms-info{margin:10px 0 0;padding:8px 10px;border-radius:6px;background:#fff0b3;color:#3d3000;font-weight:600}
+.fms-info.prio{background:#c62828;color:#fff}
+tr.fms-prio-row td{color:#b71c1c;font-weight:700}
+.seg button:disabled{opacity:.45}
