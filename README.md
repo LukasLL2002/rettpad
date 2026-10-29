@@ -6,7 +6,7 @@ RettPad ist eine unabhängige Trainings-App (Schulungs-Simulation) für die Eins
 
 ## Zugang
 
-Die Nutzung ist nur mit einem Konto möglich. Konten werden ausschließlich von einem Administrator angelegt; eine Selbstregistrierung gibt es nicht. Beim ersten Login muss ein eigenes Passwort gesetzt werden.
+Die Nutzung ist nur mit einem Konto möglich. Konten werden ausschließlich von einem Administrator angelegt; eine Selbstregistrierung gibt es nicht. Beim ersten Login muss ein eigenes Passwort gesetzt werden. Die Anmeldung erfolgt mit E-Mail-Adresse oder Personalnummer und Passwort.
 
 ## Als App installieren
 

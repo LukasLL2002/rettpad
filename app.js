@@ -183,7 +183,7 @@ function subtreeHasReq(p, n) {
   return has ? (done ? "ok" : "open") : null;
 }
 function patName(p) { const f = p.forms.patient || {}; return [f.name, f.vorname].filter(Boolean).join(", ") || "unbekannt"; }
-function canEdit(silent) { const p = P(); if (p.closed && !S.admin) { if (!silent) toast("Protokoll ist abgeschlossen – keine Änderungen möglich (nur Admin-Rolle mit 2-Faktor)."); return false; } return true; }
+function canEdit(silent) { const p = P(); if (p.closed && !S.admin) { if (!silent) toast("Protokoll ist abgeschlossen – keine Änderungen möglich (nur Admin-Rolle)."); return false; } return true; }
 function logSys(t) { S.log.unshift({ t: Date.now(), x: t }); S.log = S.log.slice(0, 200); }
 
 /* ================= UI-Grundlagen ================= */
@@ -1376,7 +1376,7 @@ TOOLS.account = { title: "Mein Konto", render() {
       return false; } }]);
   };
   const n = pendingCount();
-  return h("div", null, card("Angemeldet", kv([["Name", [me.vorname, me.name].filter(Boolean).join(" ")], ["Personalnummer", me.pnr], ["Rolle", ROLE_L[me.role] + (me.role !== "user" ? (isAdm() ? " (2-Faktor bestätigt)" : " (ohne 2-Faktor: keine Admin-Rechte)") : "")], ["Qualifikation", (QUALS.find((q) => q[0] === me.qual) || [, me.qual])[1]], ["Wache", me.wache], ["Automatische Sperre", "nach " + (S.settings.lockMin || 10) + " min Inaktivität"], ["Schnell-PIN", getPin() ? "gesetzt (nur diese Sitzung)" : "nicht gesetzt"]]),
+  return h("div", null, card("Angemeldet", kv([["Name", [me.vorname, me.name].filter(Boolean).join(" ")], ["Personalnummer", me.pnr], ["Rolle", ROLE_L[me.role]], ["Qualifikation", (QUALS.find((q) => q[0] === me.qual) || [, me.qual])[1]], ["Wache", me.wache], ["Automatische Sperre", "nach " + (S.settings.lockMin || 10) + " min Inaktivität"], ["Schnell-PIN", getPin() ? "gesetzt (nur diese Sitzung)" : "nicht gesetzt"]]),
       h("div", { class: "formbar" }, h("button", { class: "tbtn", "data-a": "pw-change", onclick: changePw }, "Passwort ändern"), h("button", { class: "tbtn", "data-a": "pin-set", onclick: setSessionPin }, "Schnell-PIN …"),
         h("button", { class: "tbtn", "data-a": "lock-now", onclick: () => showLock("Manuell gesperrt.") }, "🔒 Jetzt sperren"), h("button", { class: "tbtn danger", "data-a": "users-logout", onclick: () => logout() }, "Abmelden"))),
     card("Sperrzeit", h("div", { class: "seg" }, [2, 5, 10, 15].map((m) => h("button", { type: "button", class: (S.settings.lockMin || 10) === m ? "on" : "", "data-lock": m, onclick: () => { S.settings.lockMin = m; render(); } }, m + " min")))),
@@ -1384,7 +1384,7 @@ TOOLS.account = { title: "Mein Konto", render() {
       h("div", { class: "formbar" }, h("button", { class: "tbtn", "data-a": "sync-now", onclick: () => { syncNow(); toast("Synchronisation gestartet"); } }, "Jetzt synchronisieren"))));
 }};
 
-/* Administration: nur für Admin/Superadmin mit 2. Faktor. Alle Änderungen laufen serverseitig (Edge Functions / RLS). */
+/* Administration: nur für Admin/Superadmin. Alle Änderungen laufen serverseitig (Edge Functions / RLS). */
 const ADM_TABS = [["users", "Benutzerverwaltung"], ["admins", "Admin-Verwaltung", true], ["vehicles", "Fahrzeuge"], ["audit", "Audit-Log"]];
 function admLoad(v, force) {
   if (!force && (v.loading === v.tab || v.data)) return;
@@ -1409,7 +1409,7 @@ function userForm(v, role, u) {
   modal(edit ? "Profil bearbeiten – " + u.pnr : role === "admin" ? "Admin anlegen" : "Benutzer anlegen", h("div", null,
     h("div", { class: "form" }, edit ? null : fldI("Personalnummer *", inp("pnr", "text", { autocapitalize: "off" })), fldI("Nachname *", inp("name")), fldI("Vorname", inp("vorname")), fldI("Qualifikation", qsel), fldI("Wache", inp("wache")),
       edit ? null : fldI("Startpasswort * (mind. 10, Buchst.+Ziffern)", inp("password", "password")), edit ? null : fldI("Startpasswort wiederholen *", inp("password2", "password"))),
-    edit ? null : h("p", { class: "small" }, "Das Startpasswort bitte persönlich übergeben. Beim ersten Anmelden muss es geändert werden" + (role === "admin" ? "; Admins richten dann TOTP ein." : ".")), err), [
+    edit ? null : h("p", { class: "small" }, "Das Startpasswort bitte persönlich übergeben. Beim ersten Anmelden muss es geändert werden."), err), [
     { t: "Abbr." },
     { t: edit ? "Speichern" : "Anlegen", cls: "ok", a: "adm-save", fn: (close) => {
       if (!f.name.trim()) { showErr(err, "Nachname fehlt."); return false; }
@@ -1444,7 +1444,7 @@ function vehicleForm(v, x) {
       return false; } }], { sticky: true });
 }
 TOOLS.admin = { title: "Administration", render(v) {
-  if (!isAdm()) return card("Administration", h("p", null, "Nur für Admins mit bestätigter Zwei-Faktor-Anmeldung."));
+  if (!isAdm()) return card("Administration", h("p", null, "Nur für Admins und den Superadmin."));
   const tabs = ADM_TABS.filter((t) => !t[2] || isSuper());
   if (!v.tab || !tabs.some((t) => t[0] === v.tab)) v.tab = "users";
   admLoad(v);
@@ -1466,7 +1466,6 @@ TOOLS.admin = { title: "Administration", render(v) {
             h("button", { class: "mini", "data-a": "adm-edit-" + u.pnr, onclick: () => userForm(v, role, u) }, "✎"), " ",
             h("button", { class: "mini", "data-a": "adm-lock-" + u.pnr, onclick: () => confirmBox(u.aktiv ? "Sperren" : "Entsperren", (u.aktiv ? "Konto " + u.pnr + " sperren? Alle Sitzungen werden sofort beendet." : "Konto " + u.pnr + " wieder freigeben?"), u.aktiv ? "sperren" : "entsperren", () => admDo(v, { action: "set_active", id: u.id, aktiv: !u.aktiv }, u.aktiv ? "Gesperrt" : "Entsperrt"), u.aktiv ? "danger" : "primary") }, u.aktiv ? "sperren" : "entsperren"), " ",
             h("button", { class: "mini", "data-a": "adm-rpw-" + u.pnr, onclick: () => resetPwForm(v, u) }, "Passwort"), " ",
-            role === "admin" ? [h("button", { class: "mini", "data-a": "adm-mfa-" + u.pnr, onclick: () => confirmBox("2-Faktor zurücksetzen", "TOTP von " + u.pnr + " entfernen? Bei der nächsten Anmeldung muss neu eingerichtet werden.", "zurücksetzen", () => admDo(v, { action: "reset_mfa", id: u.id }, "2-Faktor zurückgesetzt"), "danger") }, "2FA"), " "] : null,
             h("button", { class: "mini", "data-a": "adm-del-" + u.pnr, onclick: () => confirmBox("Konto löschen", "Konto " + u.pnr + " (" + u.name + ") endgültig löschen? Einsätze bleiben erhalten.", "löschen", () => admDo(v, { action: "delete", id: u.id }, "Konto gelöscht"), "danger") }, "🗑")]))))));
   } else if (v.tab === "vehicles") {
     body = card("Fahrzeuge (" + D_.length + ")", h("div", { class: "formbar", style: "margin:0 0 8px" }, h("button", { class: "tbtn ok", "data-a": "veh-new", onclick: () => vehicleForm(v) }, "+ Fahrzeug anlegen"), reload),
@@ -1484,7 +1483,7 @@ TOOLS.admin = { title: "Administration", render(v) {
   return h("div", { "data-a": "admin-view" }, v.noBar ? null : bar, status, body);
 }};
 /* ================= Admin-Bereich „RettPad Trainer“ (Vollbild-Oberfläche für Admin/Superadmin) =================
-   Nur Komfort-Trennung der Oberfläche: Rollen- und 2FA-Prüfung erfolgen weiterhin serverseitig (RLS + Edge Functions, aal2). */
+   Nur Komfort-Trennung der Oberfläche: Rollenprüfung erfolgt serverseitig (RLS + Edge Functions). */
 let ADMIN_UI = false;
 const ADM_NAV = [["dash", "Dashboard", "▦"], ["users", "Benutzer", "👤"], ["admins", "Admins", "🛡", true], ["vehicles", "Fahrzeuge", "🚑"], ["missions", "Einsätze", "📋"], ["audit", "Audit-Log", "🧾"], ["account", "Mein Konto", "⚙"]];
 const SHIELD_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8 21 5v6.2c0 5.6-3.8 9.6-9 11.2-5.2-1.6-9-5.6-9-11.2V5z" fill="#ffb347" stroke="#08262c" stroke-width="1.6"/><path d="m7.6 12 3 3 5.8-6" fill="none" stroke="#08262c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1523,7 +1522,7 @@ function admDash(v) {
     h("div", { class: "adm-cols" },
       card("Letzte Aktionen", v.st !== "ok" ? h("p", { class: "small" }, "lädt …") : r.aud.length ? h("table", { class: "list" }, h("tbody", null, r.aud.map((a) => h("tr", null, h("td", { style: "white-space:nowrap" }, fmtD(Date.parse(a.at)) + " " + fmtT(Date.parse(a.at))), h("td", null, a.action))))) : h("p", { class: "small" }, "Noch keine Einträge."),
         h("div", { class: "formbar" }, h("button", { class: "tbtn", onclick: () => admGo("audit") }, "Audit-Log öffnen"), admReload(v))),
-      card("Sicherheit", kv([["Angemeldet", uName(ME) + " · " + ROLE_L[ME.role]], ["Zwei-Faktor", SESSION && SESSION.aal === "aal2" ? "bestätigt (TOTP)" : "fehlt"], ["Automatische Sperre", "nach " + (S.settings.lockMin || 10) + " min"], ["Rechteprüfung", "serverseitig (Datenbank-Richtlinien + Edge Functions)"]]),
+      card("Sicherheit", kv([["Angemeldet", uName(ME) + " · " + ROLE_L[ME.role]], ["Automatische Sperre", "nach " + (S.settings.lockMin || 10) + " min"], ["Rechteprüfung", "serverseitig (Datenbank-Richtlinien + Edge Functions)"]]),
         h("div", { class: "formbar" }, h("button", { class: "tbtn", "data-a": "adm-to-einsatz", onclick: leaveAdmin }, "↗ Zur Einsatz-Oberfläche"), h("button", { class: "tbtn", onclick: () => showLock("Manuell gesperrt.") }, "🔒 Sperren")))));
 }
 function admMissions(v) {
@@ -1553,7 +1552,7 @@ function admMissions(v) {
             h("td", { style: "text-align:right" }, h("button", { class: "mini", "data-a": "adm-mshow", onclick: () => show(x) }, "ansehen"))))))));
 }
 function admBody(v) {
-  if (!isAdm()) return card("Administration", h("p", null, "Nur für Admins mit bestätigter Zwei-Faktor-Anmeldung."), h("div", { class: "formbar" }, h("button", { class: "tbtn", onclick: leaveAdmin }, "Zur Einsatz-Oberfläche")));
+  if (!isAdm()) return card("Administration", h("p", null, "Nur für Admins und den Superadmin."), h("div", { class: "formbar" }, h("button", { class: "tbtn", onclick: leaveAdmin }, "Zur Einsatz-Oberfläche")));
   if (v.tab === "dash") return admDash(v);
   if (v.tab === "missions") return admMissions(v);
   if (v.tab === "account") return TOOLS.account.render(v);
@@ -1585,7 +1584,7 @@ function adminBoot() {
   const ready = Promise.all(Object.keys(jobs).map((k) => jobs[k].then((x) => (res[k] = x), () => (res[k] = null))));
   const txt = (k, unit) => (res[k] == null ? ["nicht erreichbar", "warn"] : [res[k] + " " + unit, "ok"]);
   const CH = [["Benutzerverwaltung", () => txt("users", "Konten")], ["Fahrzeuge", () => txt("veh", "Fahrzeuge")], ["Einsätze", () => txt("mis", "Einsätze")], ["Audit-Log", () => txt("aud", "Einträge")],
-    ["Sicherheit / 2FA", () => (SESSION && SESSION.aal === "aal2" ? ["zweiter Faktor bestätigt", "ok"] : ["zweiter Faktor fehlt", "warn"])]];
+    ["Anmeldung", () => (SESSION ? ["Sitzung aktiv", "ok"] : ["keine Sitzung", "warn"])]];
   const bar = h("i"), cur = h("div", { class: "cur", "data-a": "adm-boot-cur" }, "Administration wird geladen …");
   const rows = CH.map((c, n) => { const st = h("b"); return { li: h("li", { "data-check": c[0], style: "--n:" + n }, h("span", null, c[0]), st), st, c }; });
   const done = () => { osClear(true); enterAdmin("dash"); };
@@ -1720,7 +1719,7 @@ document.documentElement.classList.toggle("pwa", isInstalled());
 /* ================= Benutzer / Anmeldung (Supabase) =================
    Konten liegen zentral in Supabase Auth (Passwörter nur dort, bcrypt). Anmeldung: Personalnummer → synthetische
    E-Mail <pnr>@users.rettpad-trainer.invalid (Superadmin: echte E-Mail). Rollen stehen NUR in public.profiles (serverseitig
-   geschützt). Admin-Aktionen laufen über Edge Functions, die Rolle + aal2 (TOTP) serverseitig prüfen.
+   geschützt). Admin-Aktionen laufen über Edge Functions, die die Rolle serverseitig prüfen.
    Lokal: nur die Sitzung (sessionStorage, endet mit dem Tab) und optional ein Schnell-PIN-Hash für diese Sitzung. */
 const SB_URL = "https://ssljjgdifrwbmpcbpczh.supabase.co";
 const SB_KEY = "sb_publishable_zSxzou0CN3mvq6A5YmBNiQ_v0vQbLA3"; /* öffentlicher Client-Schlüssel – Schutz über RLS */
@@ -1762,11 +1761,11 @@ const QUALS = [["NotSan", "Notfallsanitäter/in"], ["RA", "Rettungsassistent/in"
 const ROLE_L = { superadmin: "Superadmin", admin: "Admin", user: "Benutzer" };
 const uName = (u) => (u ? [u.vorname, u.name].filter(Boolean).join(" ") + " (" + u.qual + ")" : "");
 const mapProfile = (p) => ({ id: p.id, role: p.role, pnr: p.pnr, name: p.name, vorname: p.vorname || "", qual: p.qualifikation || "", wache: p.wache || "", aktiv: p.aktiv, must: p.must_change_password });
-let ME = null, SESSION = null; /* SESSION erst nach vollständiger Anmeldung (Passwort + ggf. Passwortwechsel + TOTP) */
+let ME = null, SESSION = null; /* SESSION erst nach vollständiger Anmeldung (Kennung + Passwort + ggf. Passwortwechsel) */
 let DIR = { profiles: [], vehicles: [] };
 const curUser = () => (SESSION ? ME : null);
 const uById = (id) => (ME && ME.id === id ? ME : DIR.profiles.find((u) => u.id === id));
-const isAdm = () => !!(SESSION && ME && (ME.role === "admin" || ME.role === "superadmin") && SESSION.aal === "aal2");
+const isAdm = () => !!(SESSION && ME && (ME.role === "admin" || ME.role === "superadmin"));
 const isSuper = () => isAdm() && ME.role === "superadmin";
 const VEHICLES_FALLBACK = ["RTW 1/83-1 (fiktiv)", "RTW 1/83-2 (fiktiv)", "NEF 1/82-1 (fiktiv)", "KTW 1/85-1 (fiktiv)", "ITW 1/89-1 (fiktiv)"];
 const pwProblem = (pw, pnr) => {
@@ -2090,7 +2089,7 @@ function showLogin(prePnr, info, errMsg) {
   if (errMsg) showErr(err, errMsg);
 }
 
-/* Nach erfolgreichem Passwort: Profil prüfen → ggf. Passwortwechsel → ggf. TOTP → Besatzung */
+/* Nach erfolgreichem Passwort: Profil prüfen → ggf. Passwortwechsel → Admin-Bereich bzw. Besatzung */
 async function afterAuth(ctx) {
   ctx = ctx || {};
   let session = null; try { session = (await sb.auth.getSession()).data.session; } catch (e) {}
@@ -2098,31 +2097,15 @@ async function afterAuth(ctx) {
   const { data: prof, error } = await sb.from("profiles").select("id,role,pnr,name,vorname,qualifikation,wache,aktiv,must_change_password").eq("id", session.user.id).maybeSingle();
   if (error || !prof || !prof.aktiv) { await sb.auth.signOut({ scope: "local" }); ME = null; return showLogin("", null, error ? "Profil konnte nicht geladen werden: " + error.message : "Kein aktives Profil – bitte an die Administration wenden."); }
   ME = mapProfile(prof); ME.email = session.user.email;
-  if (prof.must_change_password || ctx.link === "recovery") {
-    /* Admin mit bereits eingerichtetem zweiten Faktor: erst TOTP bestätigen, dann neues Passwort (Server verlangt aal2) */
-    if (ME.role !== "user") {
-      const aal0 = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
-      if (aal0.currentLevel !== "aal2") { const v0 = (((await sb.auth.mfa.listFactors()).data || {}).totp || []).find((x) => x.status === "verified"); if (v0) return showMfa(v0, ctx); }
-    }
-    return showSetPassword(ctx);
-  }
-  if (ME.role !== "user") {
-    const aal = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
-    if (aal.currentLevel !== "aal2") {
-      const fl = (await sb.auth.mfa.listFactors()).data || {};
-      const v = (fl.totp || []).find((x) => x.status === "verified");
-      return v ? showMfa(v, ctx) : showMfaEnroll(ctx);
-    }
-  }
-  const aal = ((await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {}).currentLevel || "aal1";
+  if (prof.must_change_password || ctx.link === "recovery") return showSetPassword(ctx);
   ctx.pw = null;
-  SESSION = { uid: ME.id, t: Date.now(), aal }; S.admin = isAdm(); locked = false; pinTries = 0; markActive();
+  SESSION = { uid: ME.id, t: Date.now() }; S.admin = isAdm(); locked = false; pinTries = 0; markActive();
   // Lokaler Zwischenspeicher gehört genau einem Konto: fremde (nicht abgemeldete) Daten wegsortieren, eigene fortsetzen
   const resume = !ctx.unlock && S.owner === ME.id && !!(S.crew && S.crew.fahrzeug !== undefined && S.cloud);
   if (!ctx.unlock) { if (S.owner && S.owner !== ME.id) { stashMissions(S.owner); S.cloud = null; S.crew = Object.assign({}, S.crew, { ids: {} }); } S.owner = ME.id; restoreStash(ME.id); logSys((resume ? "Sitzung fortgesetzt: " : "Anmeldung: ") + uName(ME) + " (" + ROLE_L[ME.role] + ")"); }
   saveNow();
   await loadDirectory();
-  /* Admin/Superadmin (2. Faktor bereits bestätigt, sonst wäre isAdm() false): eigene Lade-Animation → Admin-Bereich */
+  /* Admin/Superadmin: eigene Lade-Animation → Admin-Bereich */
   if (!ctx.unlock && isAdm()) { pullMissions().then(() => scheduleSync(500)); return adminBoot(); }
   if (resume) { osClear(true); render(); toast("Sitzung fortgesetzt"); pullMissions().then(() => scheduleSync(500)); return; }
   if (ctx.unlock) { osClear(true); render(); toast("Entsperrt"); scheduleSync(500); return; }
@@ -2157,50 +2140,10 @@ function showSetPassword(ctx) {
   };
   osShow("auth", h("div", { class: "auth-wrap", "data-a": "screen-setpw" }, authHd(viaLink ? "Eigenes Passwort festlegen" : "Passwort ändern (Pflicht)"),
     h("div", { class: "auth-card" }, h("h2", null, viaLink ? "Willkommen" + (ME && ME.vorname ? ", " + ME.vorname : "") + " – bitte eigenes Passwort festlegen" : "Startpasswort muss geändert werden"),
-      h("p", { class: "small" }, "Mindestens 10 Zeichen, Buchstaben und Ziffern, nicht die Personalnummer. Das Passwort wird nur verschlüsselt auf dem Anmeldeserver gespeichert." + (ME && ME.role !== "user" ? " Danach richten Sie die Zwei-Faktor-Anmeldung (Authenticator-App) ein." : "")),
+      h("p", { class: "small" }, "Mindestens 10 Zeichen, Buchstaben und Ziffern, nicht die Personalnummer. Das Passwort wird nur verschlüsselt auf dem Anmeldeserver gespeichert."),
       h("div", { class: "form", style: "grid-template-columns:1fr 1fr" }, cur ? fldI("Bisheriges Passwort", cur) : null, fldI("Neues Passwort", p1), fldI("Neues Passwort wiederholen", p2)), err),
     h("div", { class: "auth-foot" }, h("div", { class: "row" }, h("button", { class: "tbtn ok", "data-a": "pw-save", onclick: submit }, "Passwort speichern")),
       h("button", { class: "tbtn danger", "data-a": "auth-logout", onclick: () => logout(true) }, "Abbrechen / Abmelden"))));
-}
-
-/* TOTP einrichten (Pflicht für Admin/Superadmin) */
-async function showMfaEnroll(ctx) {
-  const err = authErr();
-  try { const fl = (await sb.auth.mfa.listFactors()).data || {}; for (const f of fl.all || []) if (f.status !== "verified") await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {}
-  const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "RettPad " + new Date().toISOString().slice(0, 16) });
-  if (error) { osShow("auth", h("div", { class: "auth-wrap" }, authHd("Zwei-Faktor-Anmeldung"), h("div", { class: "auth-card" }, h("p", null, "Einrichtung fehlgeschlagen: " + error.message)), h("div", { class: "auth-foot" }, h("button", { class: "tbtn danger", onclick: () => logout(true) }, "Abmelden")))); return; }
-  const code = h("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", "data-f": "mfa-code", onkeydown: (e) => { if (e.key === "Enter") submit(); } });
-  const submit = async () => {
-    if (!/^\d{6}$/.test(code.value.trim())) return showErr(err, "Bitte den 6-stelligen Code eingeben.");
-    const r = await sb.auth.mfa.challengeAndVerify({ factorId: data.id, code: code.value.trim() });
-    if (r.error) { code.value = ""; return showErr(err, "Code falsch oder abgelaufen – bitte erneut versuchen."); }
-    toast("Zwei-Faktor-Anmeldung eingerichtet"); afterAuth(ctx);
-  };
-  osShow("auth", h("div", { class: "auth-wrap", "data-a": "screen-mfa-enroll" }, authHd("Zwei-Faktor-Anmeldung einrichten (Pflicht)"),
-    h("div", { class: "auth-cols" },
-      h("div", { class: "auth-card", style: "text-align:center" }, h("h2", null, "QR-Code scannen"), h("img", { src: data.totp.qr_code, alt: "QR-Code für Authenticator-App", style: "width:180px;height:180px;background:#fff" })),
-      h("div", { class: "auth-card" }, h("h2", null, "Code bestätigen"),
-        h("p", { class: "small" }, "QR-Code mit einer Authenticator-App (z. B. Aegis, FreeOTP, Google/Microsoft Authenticator) scannen oder den Schlüssel manuell eingeben:"),
-        h("code", { "data-a": "mfa-secret", style: "display:block;word-break:break-all;font-size:15px;padding:6px;background:#eef;user-select:all" }, data.totp.secret),
-        fldI("6-stelliger Code", code), err)),
-    h("div", { class: "auth-foot" }, h("div", { class: "row" }, h("button", { class: "tbtn ok", "data-a": "mfa-verify", onclick: submit }, "Bestätigen")),
-      h("button", { class: "tbtn danger", "data-a": "auth-logout", onclick: () => logout(true) }, "Abbrechen / Abmelden"))));
-}
-function showMfa(factor, ctx) {
-  const err = authErr();
-  const code = h("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", "data-f": "mfa-code", onkeydown: (e) => { if (e.key === "Enter") submit(); } });
-  let tries = 0;
-  const submit = async () => {
-    if (!/^\d{6}$/.test(code.value.trim())) return showErr(err, "Bitte den 6-stelligen Code eingeben.");
-    const r = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.value.trim() });
-    if (r.error) { code.value = ""; if (++tries >= 5) { logout(true); return; } return showErr(err, "Code falsch oder abgelaufen."); }
-    afterAuth(ctx);
-  };
-  osShow("auth", h("div", { class: "auth-wrap", "data-a": "screen-mfa" }, authHd("Zwei-Faktor-Anmeldung"),
-    h("div", { class: "auth-card" }, h("h2", null, "Code aus der Authenticator-App"), h("p", { class: "small" }, "Angemeldet als " + uName(ME) + " – " + ROLE_L[ME.role] + ". Admin-Rechte nur mit zweitem Faktor."), fldI("6-stelliger Code", code), err),
-    h("div", { class: "auth-foot" }, h("div", { class: "row" }, h("button", { class: "tbtn ok", "data-a": "mfa-verify", onclick: submit }, "Bestätigen")),
-      h("button", { class: "tbtn danger", "data-a": "auth-logout", onclick: () => logout(true) }, "Abbrechen / Abmelden"))));
-  setTimeout(() => code.focus(), 50);
 }
 
 /* Sperrbildschirm: Inaktivität, App-Neustart, Seite neu geladen. Entsperren per Schnell-PIN (max. 3 Versuche) oder Passwort. */
