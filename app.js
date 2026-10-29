@@ -2098,7 +2098,14 @@ async function afterAuth(ctx) {
   const { data: prof, error } = await sb.from("profiles").select("id,role,pnr,name,vorname,qualifikation,wache,aktiv,must_change_password").eq("id", session.user.id).maybeSingle();
   if (error || !prof || !prof.aktiv) { await sb.auth.signOut({ scope: "local" }); ME = null; return showLogin("", null, error ? "Profil konnte nicht geladen werden: " + error.message : "Kein aktives Profil – bitte an die Administration wenden."); }
   ME = mapProfile(prof); ME.email = session.user.email;
-  if (prof.must_change_password || ctx.link === "recovery") return showSetPassword(ctx);
+  if (prof.must_change_password || ctx.link === "recovery") {
+    /* Admin mit bereits eingerichtetem zweiten Faktor: erst TOTP bestätigen, dann neues Passwort (Server verlangt aal2) */
+    if (ME.role !== "user") {
+      const aal0 = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
+      if (aal0.currentLevel !== "aal2") { const v0 = (((await sb.auth.mfa.listFactors()).data || {}).totp || []).find((x) => x.status === "verified"); if (v0) return showMfa(v0, ctx); }
+    }
+    return showSetPassword(ctx);
+  }
   if (ME.role !== "user") {
     const aal = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
     if (aal.currentLevel !== "aal2") {
