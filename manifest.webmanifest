@@ -1,0 +1,28 @@
+{
+  "id": "./",
+  "name": "RettPad",
+  "short_name": "RettPad",
+  "description": "RettPad – unabhängige Schulungs-Simulation, keine echten Patientendaten, nicht mit einem Hersteller verbunden. Kein Medizinprodukt.",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["window-controls-overlay", "fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#08262c",
+  "theme_color": "#0f5f69",
+  "lang": "de",
+  "dir": "ltr",
+  "categories": ["education", "medical"],
+  "prefer_related_applications": false,
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ],
+  "screenshots": [
+    {"src": "icons/screenshot-wide.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Startseite im Querformat"},
+    {"src": "icons/screenshot-narrow.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Hochformat-Ansicht"}
+  ]
+}

@@ -1,0 +1,6 @@
+{"device":"Defi/Monitor B (SIMULATION)","hinweis":"fiktive Schulungsdaten","vitals":[
+{"time":"2026-10-29T10:00:00+01:00","hr":124,"nibp_sys":92,"nibp_dia":58,"spo2":91,"rr":26,"etco2":29},
+{"time":"2026-10-29T10:03:00+01:00","hr":118,"spo2":92,"rr":24,"etco2":30},
+{"time":"2026-10-29T10:06:00+01:00","hr":112,"nibp_sys":101,"nibp_dia":64,"spo2":94,"rr":22,"etco2":32},
+{"time":"2026-10-29T10:09:00+01:00","hr":106,"spo2":95,"rr":20,"etco2":34},
+{"time":"2026-10-29T10:12:00+01:00","hr":100,"nibp_sys":112,"nibp_dia":70,"spo2":96,"rr":18,"etco2":35}]}
