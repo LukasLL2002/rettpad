@@ -1999,6 +1999,14 @@ function shutdown(reboot) {
 }
 function powerOn() { if (!osEl) return bootDevice(); osEl.classList.add("press"); SND.click(); later(bootDevice, 380); }
 function restartApp() { saveNow(); logSys("App-Neustart"); stopCam(); ADMIN_UI = false; V = [{ t: "home" }]; render(); bootApp(); }
+function linkSession(session) {
+  try {
+    const p = session.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const c = JSON.parse(decodeURIComponent(escape(atob(p + "===".slice((p.length + 3) % 4)))));
+    const now = Date.now() / 1000;
+    return Array.isArray(c.amr) && !c.amr.some((a) => a.method === "password") && c.amr.some((a) => ["otp", "invite", "recovery", "magiclink"].includes(a.method) && now - (a.timestamp || 0) < 3500);
+  } catch (e) { return false; }
+}
 async function authStart() {
   locked = false;
   if (!sb) return showLogin("", null, "Cloud-Bibliothek konnte nicht geladen werden – Anmeldung nicht möglich.");
@@ -2006,6 +2014,11 @@ async function authStart() {
   try { session = (await sb.auth.getSession()).data.session; } catch (e) {}
   if (LINK.err) { const m = LINK.err; LINK.err = ""; return showLogin("", null, "Link ungültig oder abgelaufen: " + m + " – bitte neue Einladung / neuen Link anfordern."); }
   if (session && (LINK.type === "invite" || LINK.type === "recovery")) { const t = LINK.type; LINK.type = ""; return afterAuth({ link: t }); }
+  /* Sitzung stammt aus einem E-Mail-Link (amr "otp"/"invite"/"recovery", < 1 h), z. B. nach Neuladen der Seite → direkt Passwort festlegen */
+  if (session && linkSession(session)) {
+    let must = false; try { const r = await sb.from("profiles").select("must_change_password").eq("id", session.user.id).maybeSingle(); must = !!(r.data && r.data.must_change_password); } catch (e) {}
+    if (must) return afterAuth({ link: "invite" });
+  }
   if (session && ME) return showLock("RettPad neu gestartet – bitte entsperren.");
   if (session) return showLock("Laufende Sitzung – bitte entsperren.", session);
   showLogin();
@@ -2128,7 +2141,7 @@ function showSetPassword(ctx) {
       await fnCall("account", { action: "change_password", current_password: viaLink ? undefined : ctx.pw || (cur && cur.value), new_password: p1.value });
       p1.value = p2.value = ""; ctx.pw = null; ctx.link = null; toast("Passwort gespeichert");
       afterAuth(ctx);
-    } catch (e) { busy = false; showErr(err, "Passwort nicht geändert: " + e.message); }
+    } catch (e) { busy = false; showErr(err, "Passwort nicht geändert: " + e.message + (viaLink && /Aktuelles Passwort/i.test(e.message) ? " – der Link ist älter als 1 Stunde. Bitte abmelden, E-Mail-Adresse eingeben und „Passwort vergessen?“ nutzen." : "")); }
   };
   osShow("auth", h("div", { class: "auth-wrap", "data-a": "screen-setpw" }, authHd(viaLink ? "Eigenes Passwort festlegen" : "Passwort ändern (Pflicht)"),
     h("div", { class: "auth-card" }, h("h2", null, viaLink ? "Willkommen" + (ME && ME.vorname ? ", " + ME.vorname : "") + " – bitte eigenes Passwort festlegen" : "Startpasswort muss geändert werden"),
